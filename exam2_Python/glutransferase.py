@@ -27,6 +27,22 @@ def fetch_sequence_info(term, mail):
 
     return seq_info
 
+def fetch_file_secuences(input, mail):
+    # Conexión al NCBI
+    Entrez.email = mail
+    with open(input, 'r') as file:
+        id_list = file.readlines()
+
+    sequences = []
+    for seq_id in id_list:
+        handle = Entrez.efetch(db='nucleotide', id=seq_id.strip(), rettype='fasta')
+        seq_record = SeqIO.read(handle, 'fasta')
+        handle.close()
+
+        sequences.append(seq_record)
+
+    return sequences    
+
 def count_species(seq_info):
     species_count = {}
     for _, species in seq_info:
@@ -36,8 +52,8 @@ def count_species(seq_info):
             species_count[species] = 1
     return species_count
 
-def save_results(seq_info, species_count):
-    with open('results/source.csv', 'w', newline='') as csvfile:
+def save_results(seq_info, species_count, output_file):
+    with open(output_file, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['Source', 'Species', 'Count'])
         for source, species in seq_info:
@@ -55,7 +71,7 @@ def fetch_sequences(term, mail):
     id_list = record['IdList']
     sequences = []
     for seq_id in id_list:
-        handle = Entrez.efetch(db='nucleotide', id=seq_id, rettype='fasta', retmode='text')
+        handle = Entrez.efetch(db='nucleotide', id=seq_id, rettype='fasta')
         seq_record = SeqIO.read(handle, 'fasta')
         handle.close()
 
@@ -66,12 +82,12 @@ def fetch_sequences(term, mail):
 def translate_sequences(sequences):
     peptides = []
     for seq_record in sequences:
-        # Traducción de la secuencia de ADN
-        translation = seq_record.seq.translate(to_stop=True)
+        dna_sequence = seq_record.seq
+        protein_sequence = dna_sequence.translate()
 
-        # Verificar que el péptido empiece en metionina
-        if translation.startswith('M'):
-            peptides.append(translation)
+        # Verificar si el péptido empieza en metionina y no contiene el símbolo de parada ('*')
+        if protein_sequence.startswith('M') and '*' not in protein_sequence:
+            peptides.append(protein_sequence)
 
     return peptides
 
@@ -80,6 +96,7 @@ def calculate_properties(peptides):
     data = []
     for peptide in peptides:
         analysis = ProteinAnalysis(str(peptide))
+        print(analysis)
         molecular_weight = analysis.molecular_weight()
         instability_index = analysis.instability_index()
         data.append((peptide, molecular_weight, instability_index))
